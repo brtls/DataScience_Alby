@@ -1,0 +1,170 @@
+---
+title: "Hausaufgabe_3"
+output: html_notebook
+---
+## Load libraries
+```{r}
+library(tidyverse)
+library(readr)
+library(arules)
+library(arulesViz)
+```
+
+## Loading dataset
+```{r}
+all <- read_csv("All.csv")
+
+all$X1 <- NULL
+```
+
+
+## Erstellen der Regeln
+
+```{r}
+i <- split(all$book_title, all$user_id)
+txn <- as(i, "transactions")
+basket_rules <- apriori(txn, parameter = list(sup = 0.0015, conf = 0.001, minlen = 2,
+                        target = "rules"))
+```
+```{r}
+myRules_Direct <- as(basket_rules, "data.frame")
+basket_rules_hi <- head(basket_rules, by = "lift", 100)
+head(myRules_Direct, 20)
+
+plot(basket_rules_hi, method = "graph", main = "Books")
+```
+Die Ausgangswerte für support und confidence sind:
+
+* sup = 0.0015
+* conf = 0.001
+* Rules = 97
+
+Das heißt: Wir lassen uns Regeln dazu erstellen, dass wenn ein Buch bewertet wurde, ein Weiteres, was dann vermutlich mit Ersterem in Verbindung steht, auch bewertet wurde. Dabei geben wir mit sup = 0.15% vor, dass die Kombination zweier bewerteter Bücher mindestens in 0,15% der Fällen vorkommen muss. Mit einer Konfidenz von 0.1% geben wir vor, dass mit einer Wahrscheinlichkeit von mindestens 0.1% RHS vorkommt, wenn LHS vorliegt. Beispielsweise: Wenn "The Lord of the Rings, Part 2" vorliegt, kommt "The Lord of the Rings, Part 1" auch vor, in diesem Fall beträgt die Konfidenz 43,5%. D.h. wenn "The Lord of the Rings, Part 2" bewertet wurde, wurde in 43,5% der Fälle auch "The Lord of the Rings, Part 1" bewertet. 
+
+```{r}
+i <- split(all$book_title, all$user_id)
+txn <- as(i, "transactions")
+basket_rules <- apriori(txn, parameter = list(sup = 0.0025, conf = 0.001, minlen = 2,
+                        target = "rules"))
+
+myRules_Direct <- as(basket_rules, "data.frame")
+basket_rules_hi <- head(basket_rules, by = "lift", 100)
+head(myRules_Direct, 20)
+```
+Wenn wir nun die Werte für Support und Konfidenz verändern, verändert sich auch die Anzahl der ausgegeben Regeln. 
+Bei einem sup = 0.25% und conf = 0.1% werden nur noch 8 Regeln erstellt. Da nur noch Bücher, welche in Kombination in >=0.25%  der Fällen berücksichtigt werden.Gehen wir mit dem Support weiter runter, wird sich die Anzahl der erstellbaren Regeln dem entsprechend vergrößern. 
+
+```{r}
+i <- split(all$book_title, all$user_id)
+txn <- as(i, "transactions")
+basket_rules <- apriori(txn, parameter = list(sup = 0.0015, conf = 0.8, minlen = 2,
+                        target = "rules"))
+
+myRules_Direct <- as(basket_rules, "data.frame")
+basket_rules_hi <- head(basket_rules, by = "lift", 100)
+head(myRules_Direct, 20)
+```
+Nun verändern wir die Konfidenz von 0.1% auf 80%. Dabei werden noch zwei Regeln gefunden. **Ergebnis** 88% der Leser, welche "Harry Potter and the Goblet of Fire (Book 4)" und "Harry Potter and the Prisoner of Azkaban (Book 3)" bewertet haben, haben auch "Harry Potter and the Chamber of Secrets (Book 2)" bewertet. 
+
+### Zurzeit haben wir bei Market Basket Analysis alle Bewertungen drin, gibt es eine bessere Lösung? 
+Eine bessere Lösung mit genaueren Ergebnissen könnte sein, dass alle Bücher, welche eine Bewertungen von "0" haben, also höchstwahrscheinlich keine Bewertung, herausgefiltert werden. 
+```{r}
+all_better_ratings <- all %>% 
+  filter(book_rating > 0)
+
+i <- split(all_better_ratings$book_title, all_better_ratings$user_id)
+txn <- as(i, "transactions")
+basket_rules <- apriori(txn, parameter = list(sup = 0.0015, conf = 0.001, minlen = 2,
+                        target = "rules"))
+
+myRules_Direct <- as(basket_rules, "data.frame")
+basket_rules_hi <- head(basket_rules, by = "lift", 100)
+head(myRules_Direct, 20)
+
+plot(basket_rules_hi, method = "graph", main = "Books")
+```
+Nun kommen deutlich weniger Regeln heraus (9), welche genauer sein sollten, da die Bewertungen mit "0" herausgefiltert wurden. Wird der Support weiter nach unten angepassten, lassen sich wieder mehr Regeln finden. 
+
+In der Grafik sind die einzelnen Regeln zusehen, welche sich aus den Items und Verbindungen zusammensetzen. Je höher der Support, desto größer der Kreis. Die roten kleinen Kreise stehen für ein Item, je dunkler der Kreis, desto höher der Lift. 
+
+# Analyse mit Autoren in den Transaktionen
+
+```{r}
+i <- split(all$book_author, all$user_id)
+txn <- as(i, "transactions")
+basket_rules <- apriori(txn, parameter = list(sup = 0.0015, conf = 0.001, minlen = 2,
+                        target = "rules"))
+
+myRules_Direct <- as(basket_rules, "data.frame")
+basket_rules_hi <- head(basket_rules, by = "lift", 100)
+head(myRules_Direct, 20)
+```
+Es kommen sehr viel mehr Regeln heraus (70461) als in der ersten Transaktion. Wenn der Support erhöht wird, werden weniger Regeln gebildet, dafür wären diese umso aussagekräftiger, da mit dem Support bestimmt wird, wie häufig eine Kombination vorkommen muss. 
+
+## Visualisierungen 
+```{r}
+plot(basket_rules_hi, method = "graph", main = "Autoren")
+plot(basket_rules_hi, method="graph", main="Autoren", engine="interactive")
+```
+Wenn Autorennamen unterschiedlich geschrieben werden, aber die gleiche Person gemeint ist sollten diese Mehrfachnennungen heraus gefiltert werden. Dies fällt besonders in der Grafik auf, z.B. bei dem Autoren "Tim Lahaye" / "Tim LaHaye", sowie "Sophie Kinsella". Deswegen versuche ich mit Hilfe regulärer Ausdrücke alle Autoren in ihrer Schreibweise zu vereinheitlichen.
+```{r}
+all_filtert_authors <- all %>% 
+  mutate(book_author = ifelse(grepl("[A-Z]{2}", book_author), str_to_title(book_author), book_author)) %>% 
+  mutate(book_author = str_replace_all(book_author, "Tim Lahaye", "Tim LaHaye"))
+
+i <- split(all_filtert_authors$book_author, all_filtert_authors$user_id)
+txn <- as(i, "transactions")
+basket_rules <- apriori(txn, parameter = list(sup = 0.0015, conf = 0.001, minlen = 2,
+                        target = "rules"))
+
+myRules_Direct <- as(basket_rules, "data.frame")
+basket_rules_hi <- head(basket_rules, by = "lift", 100)
+head(myRules_Direct, 20)
+```
+```{r}
+plot(basket_rules_hi, method = "graph", main = "Autoren")
+```
+Die Umwandlung hat funktioniert. Die Autorennamen wurden in ihrer schreibweise vereinheitlicht. Insgesamt konnten 96262 Regeln gefinden werden bei einem Support 0.15% und einer Konfidenz von 0.1%. 
+
+
+### Wie kann man nun noch sicherstellen, dass nur die Autoren weiterempfohlen werden, deren Bücher man auch (mehrheitlich) gut fand? 
+Zunächst filtere ich wieder die Bewertungen, welche "0" sind, raus. Im zweiten Schritt berechne ich die durchschnittliche Bewertung der Autoren, sowie die Anzahl der Bewertungen pro Autor. Diese filter ich nun nach guten Büchern (Durchschnitt von über 8), sowie einer Anzahl an Bewertungen von über 1000, sowie einem Support von 0.25%. Das Ergebnis sind 9 Regeln und 3 Autoren, welche diesen Ansprüchen gerecht werden. Diese sind laut List sehr Empfehlenswert zu lesen und haben wohl einige Gemeinsamkeiten.
+```{r}
+
+all_filtert_authors <- all_filtert_authors %>% 
+  filter(book_rating > 0)
+
+good_authors <- all_filtert_authors %>% 
+  group_by(book_author) %>% 
+  mutate(durchschnitts_bewertung = mean(book_rating), anzahl_bewertungen = n()) %>%
+  select(book_author, user_id, book_title, durchschnitts_bewertung, anzahl_bewertungen) %>% 
+  filter(durchschnitts_bewertung > 8, anzahl_bewertungen > 1000) %>% 
+  unique()
+
+```
+
+
+```{r}
+i <- split(good_authors$book_author, good_authors$user_id)
+txn <- as(i, "transactions")
+basket_rules <- apriori(txn, parameter = list(sup = 0.0025, conf = 0.001, minlen = 2,
+                        target = "rules"))
+```
+
+
+```{r}
+myRules_Direct <- as(basket_rules, "data.frame")
+basket_rules_hi <- head(basket_rules, by = "lift", 100)
+head(myRules_Direct, 20)
+```
+```{r}
+plot(basket_rules_hi, method = "graph", main = "Autoren")
+```
+
+# Welche anderen Features wären sinnvoll? 
+
+* Das durchschnittliche Alter der Leser (so könnt nochmal explizit zwischen Kinderbuchautoren und "Normalen/Erwachsenen" Autoren unterschieden werden, vorausgesetzt die Bewerter entsprechen genau der Autorenzielgruppe). 
+* Der Standort der Leser wäre auch interessant zu wissen, um die Sprache der Bücher festzustellen, wenn man davon ausgeht das Bücher, welche in den USA gelesen werden auf Englisch geschrieben sind. Zudem könnten eventuell kulturelle Hervorsagen gamacht werden. Bswp. könnte es sein das in Europa ganz andere Bücher gelesen werden als in den USA, aufgrund kultureller Unterschiede. (Dies ist nur eine Hypothese, welche überprüft werden könnte)
+* Mit Hilfe des Publikationsjahres könnte zudem explizit nach neuen/ alten Bücher gesucht werden.  
+
+
