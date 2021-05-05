@@ -39,7 +39,8 @@ Die Ausgangswerte für support und confidence sind:
 * conf = 0.001
 * Rules = 97
 
-Das heißt: Wir lassen uns Regeln dazu erstellen, dass wenn ein Buch bewertet wurde, ein Weiteres, was dann vermutlich mit Ersterem in Verbindung steht, auch bewertet wurde. Dabei geben wir mit sup = 0.15% vor, dass die Kombination zweier bewerteter Bücher mindestens in 0,15% der Fällen vorkommen muss. Mit einer Konfidenz von 0.1% geben wir vor, dass mit einer Wahrscheinlichkeit von mindestens 0.1% RHS vorkommt, wenn LHS vorliegt. Beispielsweise: Wenn "The Lord of the Rings, Part 2" vorliegt, kommt "The Lord of the Rings, Part 1" auch vor, in diesem Fall beträgt die Konfidenz 43,5%. D.h. wenn "The Lord of the Rings, Part 2" bewertet wurde, wurde in 43,5% der Fälle auch "The Lord of the Rings, Part 1" bewertet. 
+Das heißt: Wir lassen uns Regeln dazu Erstellen, dass wenn ein Buch bewertet wurde, ein Weiteres, was dann vermutlich mit Ersterem in Verbindung steht, auch bewertet wurde. Dabei geben wir mit sup = 0.15% vor, dass die Kombination zweier bewerteter Bücher mindestens in 0,15% der Fällen vorkommt. Mit einer Konfidenz von 0.1% geben wir vor, dass mit einer Wahrscheinlichkeit von mindestens 0.1% RHS vorkommt, wenn LHS vorliegt. Beispielsweise: Wenn "The Lord of the Rings, Part 2" vorliegt, kommt "The Lord of the Rings, Part 1" auch vor, in diesem Fall beträgt die Konfidenz 43,5%. D.h. wenn "The Lord of the Rings, Part 2" bewertet wurde, wurde in 43,5% der Fälle auch "The Lord of the Rings, Part 1" bewertet. 
+
 
 ```{r}
 i <- split(all$book_title, all$user_id)
@@ -83,7 +84,7 @@ head(myRules_Direct, 20)
 
 plot(basket_rules_hi, method = "graph", main = "Books")
 ```
-Nun kommen deutlich weniger Regeln heraus (9), welche genauer sein sollten, da die Bewertungen mit "0" herausgefiltert wurden. Wird der Support weiter nach unten angepassten, lassen sich wieder mehr Regeln finden. 
+Nun kommen deutlich weniger Regeln heraus (9), welche genauer sein sollte, da die Bewertungen mit 0 herausgefiltert wurden. Wird der sup weiter nach unten angepassten, lassen sich wieder mehr Regeln finden. 
 
 In der Grafik sind die einzelnen Regeln zusehen, welche sich aus den Items und Verbindungen zusammensetzen. Je höher der Support, desto größer der Kreis. Die roten kleinen Kreise stehen für ein Item, je dunkler der Kreis, desto höher der Lift. 
 
@@ -129,6 +130,7 @@ Die Umwandlung hat funktioniert. Die Autorennamen wurden in ihrer schreibweise v
 
 ### Wie kann man nun noch sicherstellen, dass nur die Autoren weiterempfohlen werden, deren Bücher man auch (mehrheitlich) gut fand? 
 Zunächst filtere ich wieder die Bewertungen, welche "0" sind, raus. Im zweiten Schritt berechne ich die durchschnittliche Bewertung der Autoren, sowie die Anzahl der Bewertungen pro Autor. Diese filter ich nun nach guten Büchern (Durchschnitt von über 8), sowie einer Anzahl an Bewertungen von über 1000, sowie einem Support von 0.25%. Das Ergebnis sind 9 Regeln und 3 Autoren, welche diesen Ansprüchen gerecht werden. Diese sind laut List sehr Empfehlenswert zu lesen und haben wohl einige Gemeinsamkeiten.
+
 ```{r}
 
 all_filtert_authors <- all_filtert_authors %>% 
@@ -162,9 +164,9 @@ plot(basket_rules_hi, method = "graph", main = "Autoren")
 ```
 
 # Welche anderen Features wären sinnvoll? 
-
 * Das durchschnittliche Alter der Leser (so könnt nochmal explizit zwischen Kinderbuchautoren und "Normalen/Erwachsenen" Autoren unterschieden werden, vorausgesetzt die Bewerter entsprechen genau der Autorenzielgruppe). 
 * Der Standort der Leser wäre auch interessant zu wissen, um die Sprache der Bücher festzustellen, wenn man davon ausgeht das Bücher, welche in den USA gelesen werden auf Englisch geschrieben sind. Zudem könnten eventuell kulturelle Hervorsagen gamacht werden. Bswp. könnte es sein das in Europa ganz andere Bücher gelesen werden als in den USA, aufgrund kultureller Unterschiede. (Dies ist nur eine Hypothese, welche überprüft werden könnte)
 * Mit Hilfe des Publikationsjahres könnte zudem explizit nach neuen/ alten Bücher gesucht werden.  
+
 
 
