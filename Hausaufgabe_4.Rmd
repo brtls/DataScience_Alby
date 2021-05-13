@@ -1,0 +1,316 @@
+---
+title: "Hausaufgabe_4"
+output: html_notebook
+---
+# Load Libraries und Daten
+```{r}
+library(tidyverse)
+library(e1071)
+library(caret)
+library(pROC)
+library(rpart)
+library(rpart.plot)
+```
+
+```{r}
+titanic <- read_delim("titanic.csv", ";", 
+    escape_double = FALSE, trim_ws = TRUE)
+```
+
+# Weitere Features implementieren und untersuchen
+Ich habe mich für die Features "Geschwister" (sibsp) und "Verwandte" (parch), entschieden, sowie das Geschlecht. 
+
+```{r}
+(titanic_df <- titanic %>% 
+   select(survived, sibsp, parch, sex))
+```
+* NAs werdem herausgefiltert, damit der SVM Algorithmus besser durchläuft. 
+* Die Class "survived" wird zu einem Faktor mutiert, und ist somit kategorial, so kann SVM mit den Daten arbeiten.
+```{r}
+titanic_df <- na.omit(titanic_df)
+titanic_df <- titanic_df %>% 
+  mutate(survived = as.factor(survived))
+```
+
+Die Variable Geschlecht wird nun in einen numerischen Wert umgewandet. 
+```{r}
+titanic_df <- titanic_df %>%
+  mutate(sex = ifelse(sex == "female", 1, 0))
+```
+
+# Support Vector Machines Algorithmus
+Die Trainingskontrollgruppe wird aufgebaut. 
+```{r}
+train_control <- trainControl(method="cv", number=10, savePredictions = TRUE)
+```
+
+Nun werden das Trainings- und Testset für den Algorithmus definiert.
+```{r}
+set.seed(130)
+inTrain <- createDataPartition(
+  y = titanic_df$survived,
+  p = .8,
+  list = FALSE)
+training <- titanic_df[ inTrain,]
+testing  <- titanic_df[-inTrain,]
+```
+
+* Das Model wird aufgebaut, das Training erfolgt mit Hilfe des linearen SVM Modells, da bei ist die Zielvariable "survived".
+* Dann wird model.svm zusammengefasst. 
+* Mit "pred", sagen wir vorraus, ob eine Person überlebt hat oder nicht. 
+```{r}
+model.svm <- train(survived~., data=training, trControl=train_control, method="svmLinear")
+
+summary(model.svm)
+pred <- predict(model.svm, testing[,-1], probability = FALSE)
+
+model.svm$pred
+```
+Nun können wir die Hervorsage des Algorithmus nehmen und mit den tatsächlichen Daten Vergleichen, um zu sehen wie gut der Algorithmus abgeschnitten hat. 
+```{r}
+(test.results <- cbind(pred, testing))
+test.results <- test.results %>%
+  mutate(survived = as.numeric(survived)) %>%
+  mutate(pred = as.numeric(pred))
+```
+Hier nun die Versuchsmatrix. 136 Überlebende wurden richtig klassifiziert, 25 nicht. 35 Verstorbene wurden richtig klassifiziert, 65 nicht. 
+```{r}
+table(test.results$pred, testing$survived)
+```
+Erstellung des Roc AUCs zur Messung der Modell Performance.
+* Der ROC AUC von 0.75 ist schon ganz gut, allerdings gibt es auch noch Verbesserungspotenzial.
+```{r}
+pROC_obj <- roc(test.results$survived, test.results$pred,
+            smoothed = TRUE,
+            ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+            plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+            print.auc=TRUE, show.thres=TRUE)
+
+```
+Notiz: Die Berechnungen gehen recht schnell, da der Datensatz recht klein ist. Da wie einzelnen Feature sich teilweise Überlappen (sibsp) und (parch). 
+
+# Naive Bayes 
+* Ich berechnen nun die (unabhängigen) Wahrscheinlichkeiten der verschiedenen Features, zu überleben oder nicht zu überleben. Bspw. Geschlecht: 0.84 Wahrscheinlichkeit als Mann zu sterben, 0.16 als Frau zu sterben.
+
+```{r}
+my_training <- training %>%
+  mutate(survived = as.factor(survived))%>%
+  mutate(sex = as.factor(sex))%>%
+  mutate(sibsp = as.factor(sibsp)) %>%
+  mutate(parch = as.factor(parch))
+model <- naiveBayes(survived ~ ., data = my_training)
+model
+```
+Diese einzelnen Wahrscheinlichkeiten werden nun genutzt um ein Modell mit alle Features zu erhalten.
+```{r}
+my_testing <- testing %>%
+  mutate(survived = as.factor(survived))%>%
+  mutate(sex = as.factor(sex))%>%
+  mutate(sibsp = as.factor(sibsp)) %>%
+  mutate(parch = as.factor(parch))
+pred <- predict(model, my_testing)
+table(pred, my_testing$survived)
+```
+```{r}
+(test.results <- cbind(pred, my_testing))
+```
+
+Das Ergebnis ist wieder gut, mit einem ROC AUC von 0.75. Es ist ungefähr gleich mit dem Ergebniss der SVMs. Es macht den Anschein, dass die Feature "Geschwister" und "Verwandte" keinen all zu großen Einfluss auf die Klasse "survived" haben.  
+```{r}
+test.results <- test.results %>%
+  mutate(pred = as.numeric(pred))
+pROC_obj <- roc(as.numeric(as.factor(test.results$survived)), test.results$pred,
+            smoothed = TRUE,
+            ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+            plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+            print.auc=TRUE, show.thres=TRUE)
+
+```
+
+
+# Decision Tree
+Nun ein 3. Algorithmus, als Trainingsdaten übernehmen wir vom Algorithmus davor. 
+```{r}
+library(rpart)
+library(rpart.plot)
+tree<- rpart(survived~., data = training, method = 'class')
+rpart.plot(tree)
+```
+```{r}
+dt_results <- predict(tree, testing[,-1], type = 'prob')
+head(model.results.dt <- cbind(testing,dt_results),500)
+```
+
+```{r}
+test.results2 <- test.results %>%
+  mutate(pred = ifelse(pred>=0.5,1,0))
+table(test.results2$pred, testing$survived)
+```
+
+Das Ergebnis ist ein ROC AUC von 0.75 und ist somit ähnlich zu den vorherigen Ergebnissen. Dazu muss allerdings gesagt werden, das keines der zuvor genutzten Modelle, weitere Anpassungen erfahren haben. Die Ergebnisse werden sich mit weiterer Optimierung ändern. 
+```{r}
+pROC_obj <- roc(model.results.dt$survived,model.results.dt$`1`,
+            smoothed = TRUE,
+            # arguments for ci
+            ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+            # arguments for plot
+            plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+            print.auc=TRUE, show.thres=TRUE)
+```
+# Erklärung
+Insgesamt sind kaum Unterschiede in der Performance der drei Algorithmen zu sehen. Vermutlich liegt das an den Ausgewählten Features, diese scheinen keine sehr großen Einfluss auf die Klasse "Survived" zu haben, zumindest "parch" und "sibsp". 
+
+# .
+# .
+# .
+
+
+# Zusätzlicher Versuch:
+
+# Analyse mit dem Titel
+### Nun probiere ich einmal den Titel der Passagiere als Feature zu nutzen, neben dem Alter und dem Geschlecht
+Titel extrahieren
+```{r}
+extractTitle <- function(name) {
+  Name <- as.character(name)
+  
+  if (length(grep("Miss.", name)) > 0) {
+    return("Miss.")
+  } else if (length(grep("Master.", name)) > 0){
+    return("Master.")
+  } else if (length(grep("Mrs.", name)) > 0){
+    return("Mrs.")
+  } else if (length(grep("Mr.", name)) > 0){
+    return ("Mr.")
+  } else {
+    return("Other")
+  }
+}
+titles <- NULL
+for (i in 1:nrow(titanic)) {
+  titles <- c(titles, extractTitle(titanic[i,"name"]))
+}
+titanic$title <- as.factor(titles)
+```
+Neuen df bilden mit der Klasse "survived" und den drei Features
+```{r}
+titanic_names <- titanic %>% 
+  select(survived, sex, age, title)
+```
+```{r}
+titanic_names <- na.omit(titanic_names) %>% 
+  mutate(sex = ifelse(sex == "female", 1, 0)) %>% 
+  mutate(age = as.numeric(str_replace(age,",","."))) %>% 
+  mutate(survived = as.factor(survived)) %>% 
+  mutate(title = ifelse(title == "Miss.", 1, ifelse(title == "Master.", 2, ifelse(title == "Mrs.", 3, ifelse(title == "Mr.", 4, ifelse(title == "Other", 5, 6))))))
+```
+
+```{r}
+train_control <- trainControl(method="cv", number=10, savePredictions = TRUE)
+```
+
+```{r}
+set.seed(150)
+inTrain <- createDataPartition(
+  y = titanic_names$survived,
+  p = .8,
+  list = FALSE)
+training <- titanic_names[ inTrain,]
+testing  <- titanic_names[-inTrain,]
+```
+
+
+```{r}
+model.svm <- train(survived~., data=training, trControl=train_control, method="svmLinear")
+
+summary(model.svm)
+pred <- predict(model.svm, testing[,-1], probability = FALSE)
+
+model.svm$pred
+```
+```{r}
+(test.results <- cbind(pred, testing))
+test.results <- test.results %>%
+  mutate(survived = as.numeric(survived)) %>%
+  mutate(pred = as.numeric(pred))
+```
+
+```{r}
+table(test.results$pred, testing$survived)
+```
+Das Ergebnis ist recht gut ROC AUC von 0.801. 
+```{r}
+pROC_obj <- roc(test.results$survived, test.results$pred,
+            smoothed = TRUE,
+            ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+            plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+            print.auc=TRUE, show.thres=TRUE)
+
+```
+# Naive Bayes
+Nun der test mit dem Naive Bayes Classifier Algorithmus. 
+```{r}
+my_training <- training %>%
+  mutate(survived = as.factor(survived))%>%
+  mutate(sex = as.factor(sex))%>%
+  mutate(age = as.factor(ifelse(age < 16, "child", "adult"))) %>%
+  mutate(title = as.factor(title))
+model <- naiveBayes(survived ~ ., data = my_training)
+model
+```
+Diese einzelnen Wahrscheinlichkeiten werden nun genutzt um ein Modell mit alle Features zu erhalten.
+```{r}
+my_testing <- testing %>%
+  mutate(survived = as.factor(survived))%>%
+  mutate(sex = as.factor(sex))%>%
+  mutate(age = as.factor(ifelse(age < 16, "child", "adult"))) %>%
+  mutate(title = as.factor(title))
+pred <- predict(model, my_testing)
+table(pred, my_testing$survived)
+```
+
+```{r}
+(test.results <- cbind(pred, my_testing))
+```
+
+Das Ergebnis ist gleich gut, wie beim SVMs Algorithmus mit einem ROC AUC von 0.801.
+```{r}
+test.results <- test.results %>%
+  mutate(pred = as.numeric(pred))
+pROC_obj <- roc(as.numeric(as.factor(test.results$survived)), test.results$pred,
+            smoothed = TRUE,
+            ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+            plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+            print.auc=TRUE, show.thres=TRUE)
+
+```
+
+# Decision Tree
+Der Decision Tree sieht zu kurz aus... Es wir lediglich der titel dargestellt und das auch nur als >= 4. Was dann bei "yes" allen Titeln (Miss. Mr. usw.) entspricht, bis auf "other". Habe ich einen Fehler gemacht? 
+```{r}
+tree <- rpart(survived~., data = training, method = 'class')
+rpart.plot(tree)
+```
+
+```{r}
+dt_results <- predict(tree, testing[,-1], type = 'prob')
+head(model.results.dt <- cbind(testing,dt_results),500)
+```
+```{r}
+test.results2 <- test.results %>%
+  mutate(pred = ifelse(pred>=0.5,1,0))
+table(test.results2$pred, testing$survived)
+```
+
+Der ROC AUC Wert ist 0.805 und somit etwas besser als bei den anderen beiden getesteten Algorithmen. 
+```{r}
+pROC_obj <- roc(model.results.dt$survived,model.results.dt$`1`,
+            smoothed = TRUE,
+            # arguments for ci
+            ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+            # arguments for plot
+            plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+            print.auc=TRUE, show.thres=TRUE)
+```
+
+
