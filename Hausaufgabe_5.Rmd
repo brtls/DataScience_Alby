@@ -1,0 +1,83 @@
+---
+title: "Hausaufgabe_5"
+output: html_notebook
+---
+# Load Libraries and Data
+```{r}
+library(tidyverse)
+library(cluster)
+library(caret)
+options(scipen = 999)
+```
+
+```{r}
+all <- read_csv("all.csv")
+all$X1 <- NULL
+```
+
+#Aufgabe: Versuchen Sie die Leser aus dem Buch-Datenset zu clustern: Welche Bücher gehören in welches Cluster?
+
+Zunächst verkleinere ich den Datensatz (damit der Computer nicht expolodiert beim Ausführen), hierbei wähle ich die Bücher aus mit einer Bewertung von 10, da dies immer noch sehr viele sind, beschrenke ich die Anzahl der Bücher weiter indem ich nur die Bücher untersuche, welche mindestens 50 Mal bewertet wurden. Mit unique stelle ich noch sicher, dass die Nutzer nicht zwei Mal das gleiche Buchbewertet haben. 
+
+```{r}
+top_ratings <- all %>% 
+  group_by(book_title) %>%
+  mutate(no_books = n()) %>% 
+  filter(no_books > 49) %>%
+  filter(book_rating > 9) %>%
+  select(user_id, book_title) %>% 
+  unique()
+```
+
+Nun schreibe ich die Bücher als einzelne Variable, um damit rechnen zu können. Die "1" steht dafür, dass ein Nutzer das Buch bewertet hat. 
+```{r}
+books_wide <- top_ratings %>% 
+  mutate(i = 1) %>% 
+  spread(book_title,i,fill=0)
+```
+
+Finden des passenden K-Werts. Mit Hilfe eines Screen-Tests bestimme ich ein sinnvollen K-Wert. Dabei erschein die 2 am sinnvollsten, da hier der erste Knick zu sehen ist.
+```{r}
+wss <- (nrow(books_wide)-1)*sum(apply(books_wide,2,var))
+  for (i in 2:10) wss[i] <- sum(kmeans(books_wide,
+                                       centers=i)$withinss)
+plot(1:10, wss, type="b", xlab="Number of Clusters",
+     ylab="Within groups sum of squares")
+```
+
+### Denrogram bilden mit k = 2
+
+* Berechnet werden hier die Distanzen zwischen den einzelnen Variablen, daraufhin kann eine Clusterherarchie erstellt werden. 
+* Nun sind die Bücher mit Hilfe der Leser in zwei Cluster geclustert worden. Zu erkennen sind zwei klare Gruppen, viel mehr lässt sich allerdings noch nicht herauslesen. 
+```{r}
+books_wide_dist <- dist(books_wide, method = "euclidean")
+books_wide_hc <- hclust(books_wide_dist, method = "ward.D2")
+plot(books_wide_hc)
+groups <- cutree(books_wide_hc, k = 2)
+rect.hclust(books_wide_hc, k = 2, border = "red")
+```
+
+```{r}
+k_means_fit <- kmeans(books_wide, 2)
+```
+
+Wie viele Datenpunkte habe ich im Cluster?  
+```{r}
+k_means_fit$size
+```
+
+```{r}
+clusplot(books_wide, k_means_fit$cluster, color = TRUE, shade = TRUE,
+labels = 4, lines = 0, main = "K-means cluster plot")
+```
+
+
+
+
+```{r}
+table(books_wide$user_id, k_means_fit$cluster)
+```
+```{r}
+result <- as.data.frame(cbind(books_wide$user_id, k_means_fit$cluster))
+```
+
