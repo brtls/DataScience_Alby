@@ -2,7 +2,7 @@
 title: "Hausaufgabe_5"
 output: html_notebook
 ---
-# Load Libraries and Data
+### Load Libraries and Data
 ```{r}
 library(tidyverse)
 library(cluster)
@@ -15,15 +15,16 @@ all <- read_csv("all.csv")
 all$X1 <- NULL
 ```
 
-#Aufgabe: Versuchen Sie die Leser aus dem Buch-Datenset zu clustern: Welche Bücher gehören in welches Cluster?
+### Aufgabe: Versuchen Sie die Leser aus dem Buch-Datenset zu clustern: Welche Bücher gehören in welches Cluster?
+Hypothese: Die Leser lassen sich anhand der Bücher die sie lesen clustern.
 
-Zunächst verkleinere ich den Datensatz (damit der Computer nicht expolodiert beim Ausführen), hierbei wähle ich die Bücher aus mit einer Bewertung von 10, da dies immer noch sehr viele sind, beschrenke ich die Anzahl der Bücher weiter indem ich nur die Bücher untersuche, welche mindestens 50 Mal bewertet wurden. Mit unique stelle ich noch sicher, dass die Nutzer nicht zwei Mal das gleiche Buchbewertet haben. 
+Zunächst verkleinere ich den Datensatz (damit der Computer nicht expolodiert beim Ausführen), hierbei wähle ich die Bücher aus mit einer Bewertung von 10, da dies immer noch sehr viele sind, beschrenke ich die Anzahl der Bücher weiter indem ich nur die Bücher untersuche, welche mindestens 250 Mal bewertet wurden. Mit unique stelle ich noch sicher, dass die Nutzer nicht zwei Mal das gleiche Buchbewertet haben. 
 
 ```{r}
 top_ratings <- all %>% 
   group_by(book_title) %>%
   mutate(no_books = n()) %>% 
-  filter(no_books > 49) %>%
+  filter(no_books >= 250) %>%
   filter(book_rating > 9) %>%
   select(user_id, book_title) %>% 
   unique()
@@ -48,7 +49,7 @@ plot(1:10, wss, type="b", xlab="Number of Clusters",
 ### Denrogram bilden mit k = 2
 
 * Berechnet werden hier die Distanzen zwischen den einzelnen Variablen, daraufhin kann eine Clusterherarchie erstellt werden. 
-* Nun sind die Bücher mit Hilfe der Leser in zwei Cluster geclustert worden. Zu erkennen sind zwei klare Gruppen, viel mehr lässt sich allerdings noch nicht herauslesen. 
+* Nun sind die Leser mit Hilfe der Bücher in zwei Cluster geclustert worden. Zu erkennen sind zwei Gruppen, viel mehr lässt sich allerdings noch nicht herauslesen. 
 ```{r}
 books_wide_dist <- dist(books_wide, method = "euclidean")
 books_wide_hc <- hclust(books_wide_dist, method = "ward.D2")
@@ -61,23 +62,29 @@ rect.hclust(books_wide_hc, k = 2, border = "red")
 k_means_fit <- kmeans(books_wide, 2)
 ```
 
-Wie viele Datenpunkte habe ich im Cluster?  
+Wie viele Datenpunkte habe ich im Cluster? Es liegt ein ungefähres Gleichgewicht vor. 
 ```{r}
 k_means_fit$size
 ```
+Pricipal Component Analyse durchführen
 
 ```{r}
 clusplot(books_wide, k_means_fit$cluster, color = TRUE, shade = TRUE,
 labels = 4, lines = 0, main = "K-means cluster plot")
 ```
+## Interpretation
 
+Insgesamt lässt sich nicht allzu viel aus dem Plot, bzw. der PCA herauslesen. Es wurden zwei Cluster gebildet mit dem k-Wert 2, welcher durch einen Screentest bestimmt wurde. 
 
+Die Visualisierung der PCA zeigt zwei Große Cluster. Auf den Ersten Blick sieht es so aus, als würde die Mehrheit der Punkt im Cluster 2 liegen. Da Cluster 1 und 2 allerdings übereinander liegen sind auf der rechten Seite auch viele Werte in Cluster 1 vorhanden. Dies bestätigt sich auch bei einem Blick in die Daten („result“). Der Große Unterschied zwischen den beiden Clustern besteht darin, dass Cluster 1, zwei Ausreißer enthält und somit eine deutlich größere Fläche als Cluster 2 aufweist. Es scheint so, als hätten die Leser nicht in zwei trennscharfe Cluster unterteilt werden können, da 99% der Punkt in beiden Clustern liegen. Somit ist es schwer eine tiefgreifende Aussage zum Unterschied der beiden Cluster zu treffen, ebenso wie eine Ausage darüber, welche Leser nun in welches Cluster gehören. Dem entsprechend konnte die Hypothese, dass die Leser sich anhand der Bücher die sie lesen clustern lassen, in dieser Analyse nicht bestätigt werden.  
 
 
 ```{r}
 table(books_wide$user_id, k_means_fit$cluster)
 ```
 ```{r}
-result <- as.data.frame(cbind(books_wide$user_id, k_means_fit$cluster))
-```
+result <- as.data.frame(cbind(books_wide$user_id, k_means_fit$cluster)) %>% 
+  rename(user_id = V1, cluster = V2) %>% 
+  left_join(all)
+``` 
 
