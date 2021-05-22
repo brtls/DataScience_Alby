@@ -1,0 +1,13 @@
+name: titanic_app
+title: titanic_app
+username:
+account: brtls
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 4167937
+bundleId: 4627725
+url: https://brtls.shinyapps.io/titanic_app/
+when: 1621688154.92373
+lastSyncTime: 1621688154.92373
+asMultiple: FALSE
+asStatic: FALSE
